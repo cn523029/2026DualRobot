@@ -39,6 +39,7 @@ object RobotContainer {
         RobotType.SWERVE -> SwerveDriveSubsystem
         RobotType.MECANUM -> MecanumDriveSubsystem
     }
+
     // The driver's controller
     private val controller: CommandXboxController = CommandXboxController(0)
 
@@ -49,7 +50,7 @@ object RobotContainer {
 
     init {
         println("=== DigiMXP Robot Selector ===")
-        println("MXP DIO10 state: ${robotSelectSwitch.get()}")
+        println("MXP DIO19 state: ${robotSelectSwitch.get()}")
         println("Selected Robot Type: $robotType")
         SmartDashboard.putString("Selected Robot Type", robotType.name)
 
@@ -102,7 +103,7 @@ object RobotContainer {
         }
         LauncherSubsystem.defaultCommand =
             LauncherSubsystem.run {
-                LauncherSubsystem.launcherMotor.set(-controller.leftTriggerAxis + controller.rightTriggerAxis)
+                LauncherSubsystem.LauncherMotor.set(-controller.leftTriggerAxis + controller.rightTriggerAxis)
             }
         controller.a().whileTrue(LauncherSubsystem.LAUNCH_FAST)
         controller.b().whileTrue(LauncherSubsystem.LAUNCH)
