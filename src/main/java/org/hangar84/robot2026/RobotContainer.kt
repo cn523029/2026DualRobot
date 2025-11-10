@@ -12,6 +12,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard
 import edu.wpi.first.wpilibj2.command.Command
 import edu.wpi.first.wpilibj2.command.InstantCommand
 import edu.wpi.first.wpilibj2.command.button.CommandXboxController
+import org.hangar84.robot2026.RobotContainer.robotSelectSwitch
 import org.hangar84.robot2026.constants.RobotType
 import org.hangar84.robot2026.subsystems.*
 import org.hangar84.robot2026.commands.DriveCommand
@@ -95,11 +96,16 @@ object RobotContainer {
             { controller.leftX },
             { controller.rightX }
         )
-
         // Park on left bumper
-        /*
-        *Only uncomment if Swerve is active
-        * controller.leftBumper().whileTrue(SwerveDriveSubsystem.park())
-         */
+        if (robotType == RobotType.SWERVE) {
+            controller.leftBumper().whileTrue(SwerveDriveSubsystem.park())
+        }
+        LauncherSubsystem.defaultCommand =
+            LauncherSubsystem.run {
+                LauncherSubsystem.launcherMotor.set(-controller.leftTriggerAxis + controller.rightTriggerAxis)
+            }
+        controller.a().whileTrue(LauncherSubsystem.LAUNCH_FAST)
+        controller.b().whileTrue(LauncherSubsystem.LAUNCH)
+        controller.x().whileTrue(LauncherSubsystem.INTAKE)
     }
 }
