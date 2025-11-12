@@ -41,7 +41,7 @@ data object DataTable {
 }
 
 
-object MecanumDriveSubsystem :  Drivetrain() {
+class MecanumDriveSubsystem :  Drivetrain() {
 
     private val rightConfig: SparkMaxConfig = SparkMaxConfig()
 

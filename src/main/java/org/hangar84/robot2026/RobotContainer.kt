@@ -24,10 +24,9 @@ import org.hangar84.robot2026.commands.DriveCommand
 * (including subsystems, commands, and button mappings) should be declared here.
 */
 object RobotContainer {
+    private val buttonA = DigitalInput(9)
 
-    private val robotSelectSwitch = DigitalInput(9)
-
-    private val robotType: RobotType = if (robotSelectSwitch.get()) {
+    private val robotType: RobotType = if (buttonA.get()) {
         RobotType.SWERVE
     } else {
         RobotType.MECANUM
@@ -35,10 +34,10 @@ object RobotContainer {
 
     // The robot's subsystems
     private val drivetrain: Drivetrain = when (robotType) {
-        RobotType.SWERVE -> SwerveDriveSubsystem
-        RobotType.MECANUM -> MecanumDriveSubsystem
+        RobotType.SWERVE -> SwerveDriveSubsystem()
+        RobotType.MECANUM -> MecanumDriveSubsystem()
+        else -> SwerveDriveSubsystem()
     }
-
     // The driver's controller
     private val controller: CommandXboxController = CommandXboxController(0)
 
@@ -48,8 +47,6 @@ object RobotContainer {
         get() = autoChooser?.selected ?: InstantCommand()
 
     init {
-        println("=== DigiMXP Robot Selector ===")
-        println("MXP DIO9 state: ${robotSelectSwitch.get()}")
         println("Selected Robot Type: $robotType")
         SmartDashboard.putString("Selected Robot Type", robotType.name)
 
@@ -96,10 +93,6 @@ object RobotContainer {
             { controller.leftX },
             { controller.rightX }
         )
-        // Park on left bumper
-        if (robotType == RobotType.SWERVE) {
-            controller.leftBumper().whileTrue(SwerveDriveSubsystem.park())
-        }
         LauncherSubsystem.defaultCommand =
             LauncherSubsystem.run {
                 LauncherSubsystem.LauncherMotor.set(-controller.leftTriggerAxis + controller.rightTriggerAxis)

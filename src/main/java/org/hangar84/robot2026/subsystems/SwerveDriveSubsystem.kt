@@ -24,7 +24,7 @@ import org.photonvision.PhotonCamera
 import org.photonvision.PhotonPoseEstimator
 
 
-object SwerveDriveSubsystem :  Drivetrain() {
+class SwerveDriveSubsystem :  Drivetrain() {
     // Constants
 
     private val MAX_SPEED = MetersPerSecond.of(4.8)
@@ -32,8 +32,10 @@ object SwerveDriveSubsystem :  Drivetrain() {
     private val WHEEL_BASE = Inches.of(24.0)
     private val TRACK_WIDTH = Inches.of(24.5)
 
+
+
     // Create MAXSwerveModules
-    private val frontLeft: MAXSwerveModule = MAXSwerveModule(
+    val frontLeft: MAXSwerveModule = MAXSwerveModule(
         Swerve.FRONT_LEFT_DRIVING_ID,
         Swerve.FRONT_LEFT_TURNING_ID,
         Degrees.of(270.0),
@@ -41,7 +43,7 @@ object SwerveDriveSubsystem :  Drivetrain() {
         SwerveConfigs.turningConfig
     )
 
-    private val frontRight: MAXSwerveModule = MAXSwerveModule(
+    val frontRight: MAXSwerveModule = MAXSwerveModule(
         Swerve.FRONT_RIGHT_DRIVING_ID,
         Swerve.FRONT_RIGHT_TURNING_ID,
         Degrees.of(0.0),
@@ -49,7 +51,7 @@ object SwerveDriveSubsystem :  Drivetrain() {
         SwerveConfigs.turningConfig
     )
 
-    private val rearLeft: MAXSwerveModule = MAXSwerveModule(
+    val rearLeft: MAXSwerveModule = MAXSwerveModule(
         Swerve.REAR_LEFT_DRIVING_ID,
         Swerve.REAR_LEFT_TURNING_ID,
         Degrees.of(180.0),
@@ -57,7 +59,7 @@ object SwerveDriveSubsystem :  Drivetrain() {
         SwerveConfigs.turningConfig
     )
 
-    private val rearRight: MAXSwerveModule = MAXSwerveModule(
+    val rearRight: MAXSwerveModule = MAXSwerveModule(
         Swerve.REAR_RIGHT_DRIVING_ID,
         Swerve.REAR_RIGHT_TURNING_ID,
         Degrees.of(90.0),
@@ -73,7 +75,6 @@ object SwerveDriveSubsystem :  Drivetrain() {
         get() = allModules.map { it.position }.toTypedArray()
     internal val allModuleStates: Array<SwerveModuleState>
         get() = allModules.map { it.state }.toTypedArray()
-
     // -- Sensors --
 
     private val imu = ADIS16470_IMU()
