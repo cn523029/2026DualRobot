@@ -1,13 +1,19 @@
 package org.hangar84.robot2026.subsystems
 
+import com.pathplanner.lib.auto.AutoBuilder
+import com.pathplanner.lib.config.PIDConstants
+import com.pathplanner.lib.config.RobotConfig
+import com.pathplanner.lib.controllers.PPHolonomicDriveController
 import com.revrobotics.spark.SparkBase
 import com.revrobotics.spark.SparkLowLevel.MotorType
 import com.revrobotics.spark.SparkMax
 import com.revrobotics.spark.config.SparkMaxConfig
+import edu.wpi.first.apriltag.AprilTagFieldLayout
+import edu.wpi.first.apriltag.AprilTagFields
+import edu.wpi.first.math.VecBuilder
 import edu.wpi.first.math.controller.PIDController
 import edu.wpi.first.math.controller.SimpleMotorFeedforward
 import edu.wpi.first.math.geometry.Pose2d
-import edu.wpi.first.math.geometry.Rotation2d
 import edu.wpi.first.math.geometry.Translation2d
 import edu.wpi.first.math.kinematics.*
 import edu.wpi.first.networktables.NetworkTableEntry
@@ -18,12 +24,23 @@ import edu.wpi.first.units.Units.MetersPerSecond
 import edu.wpi.first.units.Units.Volts
 import edu.wpi.first.units.VoltageUnit
 import edu.wpi.first.wpilibj.ADIS16470_IMU
+import edu.wpi.first.wpilibj.DriverStation
 import edu.wpi.first.wpilibj.RobotController.getBatteryVoltage
 import edu.wpi.first.wpilibj.drive.MecanumDrive
+import edu.wpi.first.wpilibj.smartdashboard.SendableChooser
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard
 import edu.wpi.first.wpilibj.sysid.SysIdRoutineLog
+import edu.wpi.first.wpilibj2.command.Command
 import edu.wpi.first.wpilibj2.command.sysid.SysIdRoutine
 import org.hangar84.robot2026.constants.Constants.Mecanum
+import edu.wpi.first.math.estimator.MecanumDrivePoseEstimator
+import edu.wpi.first.math.geometry.Rotation2d
+import edu.wpi.first.math.geometry.Rotation3d
+import edu.wpi.first.math.geometry.Transform3d
+import edu.wpi.first.math.geometry.Translation3d
+import edu.wpi.first.units.Units.Degrees
+import edu.wpi.first.units.Units.Inches
+import org.photonvision.PhotonCamera
 
 data object DataTable {
 
@@ -84,6 +101,29 @@ class MecanumDriveSubsystem :  Drivetrain() {
             mecanumDriveWheelPositions,
             Pose2d()
         )
+
+    private val camera = PhotonCamera("FrontCamera")
+
+    private val fieldLayout = AprilTagFieldLayout.loadField(AprilTagFields.k2025ReefscapeAndyMark)
+    private val cameraOffset =
+        Transform3d(
+            Translation3d(
+                Inches.of(-8.0),
+                Inches.of(9.0),
+                Inches.of(12.0),
+            ),
+            Rotation3d(0.0, 0.0, 0.0),
+        )
+    internal val poseEstimator =
+        MecanumDrivePoseEstimator(
+            mecanumDriveKinematics,
+            Rotation2d(Degrees.of(imu.getAngle(imu.yawAxis))),
+            mecanumDriveWheelPositions,
+            Pose2d(),
+            VecBuilder.fill(0.1, 0.1, 0.1), // State standard deviations
+            VecBuilder.fill(1.0, 1.0, 1.0), // Vision standard deviations
+        )
+
 
     private var frontLeftFeedForward: SimpleMotorFeedforward = SimpleMotorFeedforward(4.0, 2.3000, 1.1004)
     private var frontRightFeedForward: SimpleMotorFeedforward = SimpleMotorFeedforward(4.0, 2.3000, 1.1004)
@@ -155,6 +195,9 @@ class MecanumDriveSubsystem :  Drivetrain() {
                 this,
             ),
         )
+    private val DRIVE_FORWARD_COMMAND = run {
+        drive(0.0, 0.3, 0.0, false)
+    }
 
     init {
         rightConfig.inverted(false)
@@ -212,5 +255,38 @@ class MecanumDriveSubsystem :  Drivetrain() {
 
     override fun drive(xSpeed: Double, ySpeed: Double, rot: Double, fieldRelative: Boolean) {
         mecanumDrive.driveCartesian(ySpeed, xSpeed, rot)
+    }
+
+    fun buildAutoChooser(): SendableChooser<Command> {
+        AutoBuilder.configure(
+            // poseSupplier =
+            { poseEstimator.estimatedPosition },
+            // resetPose =
+            poseEstimator::resetPose,
+            // IntelliJ is off its rocker here. The spread operator works here, is practically required, and compiles.
+            // The following error should be ignored, since there is no way to remove/hide it.
+            // robotRelativeSpeedsSupplier =
+            { chassisSpeeds },
+            // output =
+            this::driveRelative,
+            // controller =
+            PPHolonomicDriveController(
+                // translationConstants =
+                PIDConstants(5.0, 0.0, 0.0),
+                // rotationConstants =
+                PIDConstants(5.0, 0.0, 0.0),
+            ),
+            // robotConfig =
+            RobotConfig.fromGUISettings(),
+            // shouldFlipPath =
+            { DriverStation.getAlliance()?.get() == DriverStation.Alliance.Red },
+            // ...driveRequirements =
+            this,
+        )
+
+        val autoChooser = AutoBuilder.buildAutoChooser()
+        autoChooser.addOption("Leave (Manual)", DRIVE_FORWARD_COMMAND.withTimeout(2.5))
+
+        return autoChooser
     }
 }

@@ -1,5 +1,9 @@
 package org.hangar84.robot2026.subsystems
 
+import com.pathplanner.lib.auto.AutoBuilder
+import com.pathplanner.lib.config.PIDConstants
+import com.pathplanner.lib.config.RobotConfig
+import com.pathplanner.lib.controllers.PPHolonomicDriveController
 import edu.wpi.first.apriltag.AprilTagFieldLayout
 import edu.wpi.first.apriltag.AprilTagFields
 import edu.wpi.first.hal.FRCNetComm.tInstances
@@ -9,12 +13,11 @@ import edu.wpi.first.math.VecBuilder
 import edu.wpi.first.math.estimator.SwerveDrivePoseEstimator
 import edu.wpi.first.math.geometry.*
 import edu.wpi.first.math.kinematics.*
-import edu.wpi.first.units.Units.Degrees
-import edu.wpi.first.units.Units.Inches
-import edu.wpi.first.units.Units.MetersPerSecond
-import edu.wpi.first.units.Units.RotationsPerSecond
+import edu.wpi.first.units.Units.*
 import edu.wpi.first.wpilibj.ADIS16470_IMU
 import edu.wpi.first.wpilibj.ADIS16470_IMU.IMUAxis
+import edu.wpi.first.wpilibj.DriverStation
+import edu.wpi.first.wpilibj.smartdashboard.SendableChooser
 import edu.wpi.first.wpilibj2.command.Command
 import org.hangar84.robot2026.constants.Constants.Swerve
 import org.hangar84.robot2026.swerve.MAXSwerveModule
@@ -22,7 +25,7 @@ import org.hangar84.robot2026.swerve.SwerveConfigs
 import org.photonvision.EstimatedRobotPose
 import org.photonvision.PhotonCamera
 import org.photonvision.PhotonPoseEstimator
-
+import kotlin.jvm.optionals.getOrNull
 
 class SwerveDriveSubsystem :  Drivetrain() {
     // Constants
@@ -73,7 +76,7 @@ class SwerveDriveSubsystem :  Drivetrain() {
         get() = arrayOf(frontLeft, frontRight, rearLeft, rearRight)
     private val allModulePositions: Array<SwerveModulePosition>
         get() = allModules.map { it.position }.toTypedArray()
-    internal val allModuleStates: Array<SwerveModuleState>
+    private val allModuleStates: Array<SwerveModuleState>
         get() = allModules.map { it.state }.toTypedArray()
     // -- Sensors --
 
@@ -101,9 +104,9 @@ class SwerveDriveSubsystem :  Drivetrain() {
     private val cameraOffset =
         Transform3d(
             Translation3d(
-                Inches.of(6.0),
-                Inches.of(0.0),
-                Inches.of(6.0),
+                Inches.of(-8.0),
+                Inches.of(9.0),
+                Inches.of(12.0),
             ),
             Rotation3d(0.0, 0.0, 0.0),
         )
@@ -123,11 +126,28 @@ class SwerveDriveSubsystem :  Drivetrain() {
         get() {
             var estimate: EstimatedRobotPose? = null
             camera.allUnreadResults.forEach {
-                estimate = photonEstimator.update(it).get()
+                estimate = photonEstimator.update(it).getOrNull()
             }
 
             return estimate
         }
+    // - Static Commands -
+    internal val PARK_COMMAND = run {
+        val positions =
+            arrayOf(
+                Rotation2d.fromDegrees(45.0), // Front left
+                Rotation2d.fromDegrees(-45.0), // Front right
+                Rotation2d.fromDegrees(-45.0), // Rear left
+                Rotation2d.fromDegrees(45.0), // Rear right
+            )
+
+        allModules.forEachIndexed { i, module -> module.desiredState = SwerveModuleState(0.0, positions[i]) }
+    }
+
+    private val DRIVE_FORWARD_COMMAND = run {
+        drive(0.0, 0.3, 0.0, false)
+    }
+
 
     init {
         HAL.report(tResourceType.kResourceType_RobotDrive, tInstances.kRobotDriveSwerve_MaxSwerve)
@@ -155,13 +175,20 @@ class SwerveDriveSubsystem :  Drivetrain() {
         val swerveStates =
             kinematics.toSwerveModuleStates(
                 if (fieldRelative) {
-                    ChassisSpeeds.fromFieldRelativeSpeeds(speedX, speedY, speedAngular, rotation)
+                    ChassisSpeeds.fromFieldRelativeSpeeds(
+                        speedX,
+                        speedY,
+                        speedAngular,
+                        poseEstimator.estimatedPosition.rotation
+                    )
                 } else {
                     ChassisSpeeds(speedX, speedY, speedAngular)
                 },
             )
 
-        SwerveDriveKinematics.desaturateWheelSpeeds(swerveStates, MAX_SPEED)
+        SwerveDriveKinematics.desaturateWheelSpeeds(swerveStates,
+            MAX_SPEED
+        )
 
         allModules.forEachIndexed { i, module -> module.desiredState = swerveStates[i] }
     }
@@ -171,17 +198,36 @@ class SwerveDriveSubsystem :  Drivetrain() {
 
         allModules.forEachIndexed { i, module -> module.desiredState = desiredStates[i] }
     }
+    fun buildAutoChooser(): SendableChooser<Command> {
+        AutoBuilder.configure(
+            // poseSupplier =
+            { poseEstimator.estimatedPosition },
+            // resetPose =
+            poseEstimator::resetPose,
+            // IntelliJ is off its rocker here. The spread operator works here, is practically required, and compiles.
+            // The following error should be ignored, since there is no way to remove/hide it.
+            // robotRelativeSpeedsSupplier =
+            { kinematics.toChassisSpeeds(*allModuleStates) },
+            // output =
+            this::driveRelative,
+            // controller =
+            PPHolonomicDriveController(
+                // translationConstants =
+                PIDConstants(5.0, 0.0, 0.0),
+                // rotationConstants =
+                PIDConstants(5.0, 0.0, 0.0),
+            ),
+            // robotConfig =
+            RobotConfig.fromGUISettings(),
+            // shouldFlipPath =
+            { DriverStation.getAlliance()?.get() == DriverStation.Alliance.Red },
+            // ...driveRequirements =
+            this,
+        )
 
-    fun park(): Command =
-        this.run {
-            val positions =
-                arrayOf(
-                    Rotation2d.fromDegrees(45.0), // Front left
-                    Rotation2d.fromDegrees(-45.0), // Front right
-                    Rotation2d.fromDegrees(-45.0), // Rear left
-                    Rotation2d.fromDegrees(45.0), // Rear right
-                )
+        val autoChooser = AutoBuilder.buildAutoChooser()
+        autoChooser.addOption("Leave (Manual)", DRIVE_FORWARD_COMMAND.withTimeout(2.5))
 
-            allModules.forEachIndexed { i, module -> module.desiredState = SwerveModuleState(0.0, positions[i]) }
-        }
+        return autoChooser
+    }
 }
